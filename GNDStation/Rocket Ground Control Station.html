@@ -1,0 +1,757 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lynx Ground Control Station</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Leaflet Map Library -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    
+    <!-- Three.js 3D Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/STLLoader.js"></script>
+
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #111827;
+            color: #E5E7EB;
+        }
+        .panel {
+            background-color: #1F2937;
+            border: 1px solid #374151;
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+        }
+        .panel-title {
+            color: #9CA3AF;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            border-bottom: 1px solid #374151;
+            padding-bottom: 0.75rem;
+            margin-bottom: 1rem;
+        }
+        .telemetry-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #F9FAFB;
+        }
+        .telemetry-unit {
+            font-size: 0.875rem;
+            color: #9CA3AF;
+            margin-left: 0.25rem;
+        }
+        .status-light {
+            width: 1rem;
+            height: 1rem;
+            border-radius: 50%;
+            display: inline-block;
+            vertical-align: middle;
+            margin-right: 0.5rem;
+            transition: background-color 0.3s;
+        }
+        .status-light.off { background-color: #4B5563; }
+        .status-light.green { background-color: #34D399; box-shadow: 0 0 8px #34D399; }
+        .status-light.yellow { background-color: #FBBF24; box-shadow: 0 0 8px #FBBF24; }
+        .status-light.red { background-color: #F87171; box-shadow: 0 0 8px #F87171; }
+        .btn {
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            transition: all 0.2s;
+            cursor: pointer;
+            border: none;
+        }
+        .btn:disabled {
+            background-color: #374151;
+            cursor: not-allowed;
+        }
+        .btn-primary { background-color: #3B82F6; color: white; }
+        .btn-primary:hover:not(:disabled) { background-color: #2563EB; }
+        .btn-danger { background-color: #EF4444; color: white; }
+        .btn-danger:hover:not(:disabled) { background-color: #DC2626; }
+        .btn-success { background-color: #10B981; color: white; }
+        .btn-success:hover:not(:disabled) { background-color: #059669; }
+        .btn-secondary { background-color: #4B5563; color: white; }
+        .btn-secondary:hover:not(:disabled) { background-color: #374151; }
+        .terminal {
+            background-color: #000;
+            border: 1px solid #374151;
+            border-radius: 0.5rem;
+            height: 200px;
+            padding: 1rem;
+            overflow-y: scroll;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 0.875rem;
+            color: #D1D5DB;
+        }
+        .terminal p { margin: 0; padding: 0.1rem 0; }
+        .terminal .log-info { color: #34D399; }
+        .terminal .log-warn { color: #FBBF24; }
+        .terminal .log-error { color: #F87171; }
+        .attitude-indicator {
+            width: 120px;
+            height: 120px;
+            border: 3px solid #9CA3AF;
+            border-radius: 50%;
+            position: relative;
+            overflow: hidden;
+            background-color: #1F2937;
+        }
+        .attitude-indicator .aircraft-symbol {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            top: 0; left: 0;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M50 45 L30 55 L35 55 L50 50 L65 55 L70 55 Z' fill='%23FBBF24'/%3E%3Cpath d='M50 40 L50 20' stroke='%23FBBF24' stroke-width='3'/%3E%3C/svg%3E");
+            z-index: 10;
+        }
+        .attitude-indicator .horizon {
+            position: absolute;
+            width: 200%;
+            height: 200%;
+            top: -50%;
+            left: -50%;
+            transition: transform 0.1s linear;
+            background: linear-gradient(to bottom, #3B82F6 50%, #854D0E 50%);
+        }
+        .pitch-ladder {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            top: 0;
+            left: 0;
+            font-size: 8px;
+            color: white;
+            font-weight: bold;
+        }
+        .pitch-line {
+            position: absolute;
+            left: 35%;
+            width: 30%;
+            height: 1px;
+            background-color: white;
+        }
+        .pitch-line.short {
+            left: 40%;
+            width: 20%;
+        }
+        .pitch-label {
+            position: absolute;
+        }
+        #map {
+            height: 250px;
+            border-radius: 0.75rem;
+            border: 1px solid #374151;
+        }
+        #rocket-viewer {
+            height: 250px;
+            border-radius: 0.75rem;
+            border: 1px solid #374151;
+            cursor: grab;
+        }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+
+    <!-- Header Bar -->
+    <header class="panel flex flex-wrap items-center justify-between mb-8 gap-4">
+        <div class="flex items-center gap-6">
+            <h1 class="text-2xl font-bold text-white">Lynx Ground Control Station</h1>
+            <div class="flex items-center gap-2">
+                <label for="com-port" class="text-sm font-medium text-gray-400">COM Port:</label>
+                <select id="com-port" class="bg-gray-700 border border-gray-600 rounded-md px-2 py-1 text-sm">
+                    <option>COM3</option>
+                    <option>COM4</option>
+                    <option>/dev/ttyUSB0</option>
+                </select>
+            </div>
+            <div class="flex items-center gap-2">
+                <label for="frequency" class="text-sm font-medium text-gray-400">Frequency:</label>
+                <input type="text" id="frequency" value="433.0" class="bg-gray-700 border border-gray-600 rounded-md px-2 py-1 w-24 text-sm">
+                <span class="text-gray-400 text-sm">MHz</span>
+            </div>
+        </div>
+        <div class="flex items-center gap-4">
+            <button id="log-btn" class="btn btn-success">Start Logging</button>
+            <button id="download-log-btn" class="btn btn-secondary" disabled>Download Log</button>
+            <div class="flex items-center gap-2">
+                <div id="connection-status" class="status-light off"></div>
+                <span id="connection-text">DISCONNECTED</span>
+            </div>
+            <button id="connect-btn" class="btn btn-primary">Connect</button>
+        </div>
+    </header>
+
+    <!-- Main Grid -->
+    <main class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        
+        <!-- Left Column: Controls & Status -->
+        <div class="flex flex-col gap-8">
+            <div class="panel">
+                <h2 class="panel-title">Recovery System</h2>
+                <div id="pyro-controls"></div>
+            </div>
+            <div class="panel">
+                <h2 class="panel-title">System Status</h2>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <p class="font-medium text-gray-400">Flight Status:</p>
+                        <p id="flight-status" class="telemetry-value text-xl">PRE-FLIGHT</p>
+                    </div>
+                    <div>
+                        <p class="font-medium text-gray-400">Flight Time:</p>
+                        <p id="flight-timer" class="telemetry-value text-xl font-mono">00:00</p>
+                    </div>
+                </div>
+                 <div class="flex items-center justify-between mt-4">
+                    <span class="font-medium">Battery:</span>
+                    <select id="battery-select" class="bg-gray-700 border border-gray-600 rounded-md px-2 py-1 text-sm">
+                        <option value="avionics">Avionics</option>
+                        <option value="payload">Payload</option>
+                    </select>
+                </div>
+                <div class="w-full bg-gray-700 rounded-full h-8 mt-2 p-1 flex items-center">
+                    <div id="battery-level" class="bg-green-500 h-6 rounded-full transition-all duration-500" style="width: 75%;"></div>
+                    <span id="battery-percentage" class="ml-auto mr-3 text-sm font-bold text-white mix-blend-difference">75%</span>
+                </div>
+            </div>
+            <div class="panel">
+                <h2 class="panel-title">GNSS Map & Info</h2>
+                <div id="map"></div>
+                <div class="grid grid-cols-3 gap-x-4 gap-y-2 mt-4 text-sm">
+                    <p><i class="fas fa-globe-americas w-5 text-gray-400 mr-1"></i>Lat: <span id="gnss-lat" class="font-mono">...</span></p>
+                    <p><i class="fas fa-globe-americas w-5 text-gray-400 mr-1"></i>Lon: <span id="gnss-lon" class="font-mono">...</span></p>
+                    <p><i class="fas fa-satellite w-5 text-gray-400 mr-1"></i>Sats: <span id="gnss-sats" class="font-mono">...</span></p>
+                    <p><i class="fas fa-mountain w-5 text-gray-400 mr-1"></i>Alt: <span id="gnss-alt" class="font-mono">...</span></p>
+                    <p><i class="fas fa-tachometer-alt w-5 text-gray-400 mr-1"></i>Speed: <span id="gnss-speed" class="font-mono">...</span></p>
+                    <p><i class="fas fa-clock w-5 text-gray-400 mr-1"></i>UTC: <span id="gnss-time" class="font-mono">...</span></p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Center Column: Altitude & IMUs -->
+        <div class="flex flex-col gap-8">
+            <div class="panel">
+                <h2 class="panel-title">Altitude & Velocity</h2>
+                <div class="grid grid-cols-3 gap-4 text-center">
+                    <div><p class="text-gray-400">Pressure</p><p><span id="pressure-value" class="telemetry-value">1013.25</span><span class="telemetry-unit">hPa</span></p></div>
+                    <div><p class="text-gray-400">Altitude (AGL)</p><p><span id="altitude-value" class="telemetry-value">0</span><span class="telemetry-unit">m</span></p></div>
+                    <div><p class="text-gray-400">Speed</p><p><span id="speed-value" class="telemetry-value">0</span><span class="telemetry-unit">m/s</span></p></div>
+                </div>
+                 <div class="mt-6">
+                    <label for="msl-pressure" class="text-sm font-medium text-gray-400">Set Ground MSL Pressure (hPa)</label>
+                    <input type="number" id="msl-pressure" value="1013.25" class="w-full bg-gray-800 border border-gray-600 rounded-md p-2 mt-1">
+                </div>
+            </div>
+             <div class="panel">
+                <h2 class="panel-title">IMU 1 (9-Axis)</h2>
+                <div class="flex justify-around items-center">
+                    <div class="attitude-indicator" id="imu1-attitude">
+                        <div class="horizon" id="imu1-horizon"><div class="pitch-ladder" id="imu1-pitch-ladder"></div></div>
+                        <div class="aircraft-symbol"></div>
+                    </div>
+                    <div class="text-xs font-mono grid grid-cols-2 gap-x-4">
+                        <p>Roll: <span id="imu1-roll">0.0°</span></p><p>Acc X: <span id="imu1-ax">0.0</span></p>
+                        <p>Pitch: <span id="imu1-pitch">0.0°</span></p><p>Acc Y: <span id="imu1-ay">0.0</span></p>
+                        <p>Yaw: <span id="imu1-yaw">0.0°</span></p><p>Acc Z: <span id="imu1-az">0.0</span></p>
+                        <p class="mt-2">Mag X: <span id="imu1-magx">0</span></p><p></p>
+                        <p>Mag Y: <span id="imu1-magy">0</span></p><p></p>
+                        <p>Mag Z: <span id="imu1-magz">0</span></p>
+                    </div>
+                </div>
+            </div>
+            <div class="panel">
+                <h2 class="panel-title">IMU 2 (6-Axis)</h2>
+                 <div class="flex justify-around items-center">
+                    <div class="attitude-indicator" id="imu2-attitude">
+                        <div class="horizon" id="imu2-horizon"><div class="pitch-ladder" id="imu2-pitch-ladder"></div></div>
+                        <div class="aircraft-symbol"></div>
+                    </div>
+                    <div class="text-xs font-mono grid grid-cols-2 gap-x-4">
+                        <p>Roll: <span id="imu2-roll">0.0°</span></p><p>Acc X: <span id="imu2-ax">0.0</span></p>
+                        <p>Pitch: <span id="imu2-pitch">0.0°</span></p><p>Acc Y: <span id="imu2-ay">0.0</span></p>
+                        <p>Yaw: <span id="imu2-yaw">0.0°</span></p><p>Acc Z: <span id="imu2-az">0.0</span></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Column: 3D Viewer -->
+        <div class="flex flex-col gap-8">
+            <div class="panel h-full flex flex-col">
+                <div class="flex justify-between items-center">
+                     <h2 class="panel-title mb-0 border-b-0">3D Vehicle View</h2>
+                     <label for="model-import-btn" class="btn btn-secondary text-xs">
+                        Import Model
+                        <input type="file" id="model-import-btn" class="hidden" accept=".stl">
+                     </label>
+                </div>
+                <div id="rocket-viewer-container" class="w-full flex-grow mt-4">
+                    <canvas id="rocket-viewer"></canvas>
+                </div>
+            </div>
+        </div>
+    </main>
+    
+    <!-- Terminal -->
+    <footer class="mt-8">
+        <div class="panel">
+            <h2 class="panel-title">Terminal</h2>
+            <div id="terminal-output" class="terminal"></div>
+        </div>
+    </footer>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // --- DOM Element References ---
+            const connectBtn = document.getElementById('connect-btn');
+            const connectionStatus = document.getElementById('connection-status');
+            const connectionText = document.getElementById('connection-text');
+            const terminalOutput = document.getElementById('terminal-output');
+            
+            const pressureValue = document.getElementById('pressure-value');
+            const altitudeValue = document.getElementById('altitude-value');
+            const speedValue = document.getElementById('speed-value');
+            const mslPressureInput = document.getElementById('msl-pressure');
+
+            const flightTimerEl = document.getElementById('flight-timer');
+            const logBtn = document.getElementById('log-btn');
+            const downloadLogBtn = document.getElementById('download-log-btn');
+            
+            const batteryLevel = document.getElementById('battery-level');
+            const batteryPercentage = document.getElementById('battery-percentage');
+
+            const gnss = {
+                lat: document.getElementById('gnss-lat'), lon: document.getElementById('gnss-lon'),
+                alt: document.getElementById('gnss-alt'), sats: document.getElementById('gnss-sats'),
+                speed: document.getElementById('gnss-speed'), time: document.getElementById('gnss-time'),
+            };
+
+            const imu1 = {
+                roll: document.getElementById('imu1-roll'), pitch: document.getElementById('imu1-pitch'), yaw: document.getElementById('imu1-yaw'),
+                ax: document.getElementById('imu1-ax'), ay: document.getElementById('imu1-ay'), az: document.getElementById('imu1-az'),
+                magx: document.getElementById('imu1-magx'), magy: document.getElementById('imu1-magy'), magz: document.getElementById('imu1-magz'),
+                horizon: document.getElementById('imu1-horizon'),
+            };
+
+            const imu2 = {
+                roll: document.getElementById('imu2-roll'), pitch: document.getElementById('imu2-pitch'), yaw: document.getElementById('imu2-yaw'),
+                ax: document.getElementById('imu2-ax'), ay: document.getElementById('imu2-ay'), az: document.getElementById('imu2-az'),
+                horizon: document.getElementById('imu2-horizon'),
+            };
+            
+            const flightStatusEl = document.getElementById('flight-status');
+            const modelImportBtn = document.getElementById('model-import-btn');
+
+            // --- State Variables ---
+            let isConnected = false;
+            let simulationInterval = null;
+            let groundMslPressure = 1013.25;
+            let flightTimerInterval = null;
+            let flightSeconds = 0;
+            let isLogging = false;
+            let telemetryLog = [];
+            
+            // --- Map Initialization ---
+            const map = L.map('map').setView([39.76, -8.80], 13);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(map);
+            let rocketMarker = L.marker([39.76, -8.80]).addTo(map);
+
+            // --- Pitch Ladder Generation ---
+            function createPitchLadder(containerId) {
+                const container = document.getElementById(containerId);
+                for (let i = -90; i <= 90; i += 10) {
+                    if (i === 0) continue;
+                    const line = document.createElement('div');
+                    line.className = 'pitch-line' + (Math.abs(i) % 30 !== 0 ? ' short' : '');
+                    const position = 50 - (i * (50/90)); // Map pitch angle to percentage
+                    line.style.top = `${position}%`;
+                    container.appendChild(line);
+                    
+                    if (Math.abs(i) % 30 === 0) {
+                        const labelLeft = document.createElement('span');
+                        labelLeft.className = 'pitch-label';
+                        labelLeft.style.top = `${position - 1.5}%`;
+                        labelLeft.style.left = '25%';
+                        labelLeft.textContent = Math.abs(i);
+                        container.appendChild(labelLeft);
+
+                        const labelRight = document.createElement('span');
+                        labelRight.className = 'pitch-label';
+                        labelRight.style.top = `${position - 1.5}%`;
+                        labelRight.style.right = '25%';
+                        labelRight.textContent = Math.abs(i);
+                        container.appendChild(labelRight);
+                    }
+                }
+            }
+            createPitchLadder('imu1-pitch-ladder');
+            createPitchLadder('imu2-pitch-ladder');
+
+
+            // --- 3D Viewer (Three.js) ---
+            let scene, camera, renderer, rocketModel;
+
+            function init3DViewer() {
+                const container = document.getElementById('rocket-viewer-container');
+                scene = new THREE.Scene();
+                
+                const aspect = container.clientWidth / container.clientHeight;
+                const d = 10;
+                camera = new THREE.OrthographicCamera(-d * aspect, d * aspect, d, -d, 1, 1000);
+                camera.position.set(20, 20, 20);
+                camera.lookAt(scene.position);
+
+                renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('rocket-viewer'), antialias: true, alpha: true });
+                renderer.setSize(container.clientWidth, container.clientHeight);
+                container.appendChild(renderer.domElement);
+                
+                scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+                const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+                dirLight.position.set(5, 10, 7.5);
+                scene.add(dirLight);
+
+                createPlaceholderRocket();
+
+                window.addEventListener('resize', () => {
+                    if (!container) return;
+                    const width = container.clientWidth;
+                    const height = container.clientHeight;
+                    camera.left = -d * (width/height);
+                    camera.right = d * (width/height);
+                    camera.updateProjectionMatrix();
+                    renderer.setSize(width, height);
+                }, false);
+
+                animate3D();
+            }
+            
+            function createPlaceholderRocket() {
+                 if (rocketModel) scene.remove(rocketModel);
+                 const rocketBodyMat = new THREE.MeshPhongMaterial({ color: 0xD1D5DB });
+                 const rocketFinMat = new THREE.MeshPhongMaterial({ color: 0xEF4444 });
+                
+                 rocketModel = new THREE.Group();
+                 const body = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 10, 32), rocketBodyMat);
+                 const nose = new THREE.Mesh(new THREE.ConeGeometry(1, 3, 32), rocketBodyMat);
+                 nose.position.y = 6.5;
+                 body.add(nose);
+                
+                 for(let i=0; i<4; i++){
+                     const fin = new THREE.Mesh(new THREE.BoxGeometry(0.2, 3, 3), rocketFinMat);
+                     fin.position.y = -3;
+                     const angle = i * Math.PI / 2;
+                     fin.position.x = Math.cos(angle) * 1;
+                     fin.position.z = Math.sin(angle) * 1;
+                     fin.rotation.y = angle;
+                     body.add(fin);
+                 }
+
+                 rocketModel.add(body);
+                 rocketModel.rotation.order = 'YXZ';
+                 scene.add(rocketModel);
+            }
+
+            function animate3D() {
+                requestAnimationFrame(animate3D);
+                renderer.render(scene, camera);
+            }
+
+            // --- Pyro Channels Logic ---
+            const pyroChannels = [ { id: 1, name: 'Drogue', state: 'DISARMED', continuity: 'UNKNOWN' }, { id: 2, name: 'Main', state: 'DISARMED', continuity: 'UNKNOWN' }, { id: 3, name: 'Main Sec', state: 'DISARMED', continuity: 'UNKNOWN' } ];
+            const pyroControlsContainer = document.getElementById('pyro-controls');
+            function renderPyroControls() {
+                pyroControlsContainer.innerHTML = '';
+                pyroChannels.forEach(pyro => {
+                    const continuityColor = pyro.continuity === 'OK' ? 'green' : (pyro.continuity === 'NO_CONTINUITY' ? 'red' : 'off');
+                    const continuityText = pyro.continuity.replace('_', ' ');
+                    let stateText, stateColor, buttonsHtml;
+                    switch(pyro.state) {
+                        case 'DISARMED': stateText = 'DISARMED'; stateColor = 'off'; buttonsHtml = `<button class="btn btn-primary" onclick="armPyro(${pyro.id})">Arm</button>`; break;
+                        case 'ARMED': stateText = 'ARMED'; stateColor = 'yellow'; buttonsHtml = `<button class="btn btn-danger" onclick="firePyro(${pyro.id})">Fire</button> <button class="btn btn-secondary" onclick="disarmPyro(${pyro.id})">Disarm</button>`; break;
+                        case 'FIRING': stateText = 'FIRING'; stateColor = 'red'; buttonsHtml = ``; break;
+                        case 'DEPLOYED': stateText = 'DEPLOYED'; stateColor = 'green'; buttonsHtml = ``; break;
+                    }
+                    const pyroHtml = `<div class="flex items-center justify-between p-2 rounded-md ${pyro.state === 'ARMED' ? 'bg-yellow-900/50' : ''} mb-2"> <div class="flex items-center gap-4"> <span class="font-bold text-white w-24">Pyro ${pyro.id} (${pyro.name})</span> <div class="flex items-center" title="Continuity"> <div class="status-light ${continuityColor}"></div> <span class="text-sm text-gray-300">${continuityText}</span> </div> <div class="flex items-center" title="State"> <div class="status-light ${stateColor}"></div> <span class="text-sm text-gray-300">${stateText}</span> </div> </div> <div class="flex gap-2">${buttonsHtml}</div> </div>`;
+                    pyroControlsContainer.innerHTML += pyroHtml;
+                });
+            }
+            window.armPyro = (id) => { const pyro = pyroChannels.find(p => p.id === id); if (pyro.continuity !== 'OK') { logMessage(`Cannot arm Pyro ${id}: No continuity detected.`, 'error'); return; } pyro.state = 'ARMED'; logMessage(`Pyro ${id} (${pyro.name}) ARMED by user.`, 'warn'); renderPyroControls(); };
+            window.disarmPyro = (id) => { const pyro = pyroChannels.find(p => p.id === id); pyro.state = 'DISARMED'; logMessage(`Pyro ${id} (${pyro.name}) disarmed by user.`, 'info'); renderPyroControls(); };
+            window.firePyro = (id) => { const pyro = pyroChannels.find(p => p.id === id); pyro.state = 'FIRING'; logMessage(`FIRE command sent to Pyro ${id} (${pyro.name}).`, 'error'); renderPyroControls(); setTimeout(() => { pyro.state = 'DEPLOYED'; pyro.continuity = 'NO_CONTINUITY'; logMessage(`Pyro ${id} (${pyro.name}) fired. Post-fire state: no continuity.`, 'info'); renderPyroControls(); }, 1000); };
+            function logMessage(message, type = 'info') { const p = document.createElement('p'); const time = new Date().toLocaleTimeString(); p.innerHTML = `<span class="text-gray-500">${time}</span> <span class="log-${type}">[${type.toUpperCase()}]</span> ${message}`; terminalOutput.appendChild(p); terminalOutput.scrollTop = terminalOutput.scrollHeight; }
+
+            // --- UI Update & Simulation ---
+            function updateUI(data) {
+                // Altitude & Velocity
+                pressureValue.textContent = data.pressure.toFixed(2);
+                altitudeValue.textContent = data.altitude.toFixed(1);
+                speedValue.textContent = data.speed.toFixed(1);
+                
+                flightStatusEl.textContent = data.flight_phase.replace('_', ' ');
+
+                batteryLevel.style.width = `${data.battery}%`;
+                batteryPercentage.textContent = `${data.battery}%`;
+                batteryLevel.classList.toggle('bg-red-500', data.battery < 20);
+                batteryLevel.classList.toggle('bg-green-500', data.battery >= 20);
+
+                // GNSS & Map
+                const latLng = [data.gnss.lat, data.gnss.lon];
+                gnss.lat.textContent = data.gnss.lat.toFixed(6); gnss.lon.textContent = data.gnss.lon.toFixed(6);
+                gnss.alt.textContent = `${data.gnss.alt.toFixed(1)} m`; gnss.sats.textContent = data.gnss.sats;
+                gnss.speed.textContent = `${data.gnss.speed.toFixed(1)} m/s`; gnss.time.textContent = new Date(data.timestamp).toLocaleTimeString();
+                rocketMarker.setLatLng(latLng);
+                if (data.flight_phase !== 'PRE_FLIGHT') map.panTo(latLng);
+                
+                // IMUs & 3D Model
+                function updateAttitude(imuData, imuElements, isPrimary) {
+                    imuElements.roll.textContent = `${imuData.roll.toFixed(1)}°`;
+                    imuElements.pitch.textContent = `${imuData.pitch.toFixed(1)}°`;
+                    imuElements.yaw.textContent = `${imuData.yaw.toFixed(1)}°`;
+                    imuElements.ax.textContent = imuData.ax.toFixed(2);
+                    imuElements.ay.textContent = imuData.ay.toFixed(2);
+                    imuElements.az.textContent = imuData.az.toFixed(2);
+                    
+                    // Pitch UP (+90) -> See SKY -> Horizon moves DOWN -> translateY is POSITIVE.
+                    // Pitch DOWN (-90) -> See GROUND -> Horizon moves UP -> translateY is NEGATIVE.
+                    // Roll RIGHT (+ve) -> Horizon rotates LEFT (-ve).
+                    imuElements.horizon.style.transform = `rotate(${-imuData.roll}deg) translateY(${imuData.pitch * (50/90)}%)`;
+
+                    if (isPrimary && rocketModel) {
+                        const degToRad = Math.PI / 180;
+                        // To make the Y-up model point correctly:
+                        // Pitch UP (+90) -> rotation.x = 0
+                        // Pitch HORIZONTAL (0) -> rotation.x = -90deg
+                        rocketModel.rotation.y = imuData.yaw * degToRad;
+                        rocketModel.rotation.x = (imuData.pitch - 90) * degToRad;
+                        rocketModel.rotation.z = -imuData.roll * degToRad;
+                    }
+                }
+                updateAttitude(data.imu1, imu1, true);
+                if(imu1.magx){
+                    imu1.magx.textContent = data.imu1.magx; imu1.magy.textContent = data.imu1.magy; imu1.magz.textContent = data.imu1.magz;
+                }
+                updateAttitude(data.imu2, imu2, false);
+
+                // Pyros
+                pyroChannels[0].continuity = data.pyro1_cont ? 'OK' : 'NO_CONTINUITY';
+                pyroChannels[1].continuity = data.pyro2_cont ? 'OK' : 'NO_CONTINUITY';
+                pyroChannels[2].continuity = data.pyro3_cont ? 'OK' : 'NO_CONTINUITY';
+                
+                const droguePyro = pyroChannels.find(p => p.id === 1);
+                if (data.flight_phase === 'DROGUE_DESCENT' && droguePyro.state !== 'DEPLOYED') {
+                   droguePyro.state = 'DEPLOYED';
+                   logMessage('Apogee detected. Drogue pyro fired.', 'warn');
+                   renderPyroControls();
+                }
+                
+                const mainPyro = pyroChannels.find(p => p.id === 2);
+                if (data.flight_phase === 'MAIN_DESCENT' && mainPyro.state !== 'DEPLOYED') {
+                   mainPyro.state = 'DEPLOYED';
+                   logMessage('Main altitude reached. Main pyro fired.', 'warn');
+                   renderPyroControls();
+                }
+
+                // Logging
+                if (isLogging) telemetryLog.push(data);
+            }
+            
+            // --- Realistic Simulation ---
+            let simState = {};
+            function initSimState() {
+                 simState = {
+                    altitude: 0, speed: 0, az: 0,
+                    flight_phase: 'PRE_FLIGHT',
+                    lat: 39.7661, lon: -8.8019,
+                    apogee: 0,
+                };
+            }
+            
+            function generateFakeData() {
+                const t = flightSeconds;
+                const GRAVITY = 9.81;
+
+                // Flight Phase Logic
+                if (t > 1 && t <= 7) simState.flight_phase = 'BOOST';
+                else if (t > 7 && simState.speed > 0) simState.flight_phase = 'COAST';
+                else if (t > 7 && simState.speed <= 0 && simState.flight_phase !== 'DROGUE_DESCENT' && simState.flight_phase !== 'MAIN_DESCENT' && simState.flight_phase !== 'LANDED') {
+                    simState.flight_phase = 'APOGEE';
+                    if (simState.apogee === 0) simState.apogee = simState.altitude; // Set apogee only once
+                } else if (simState.flight_phase === 'APOGEE' || (simState.flight_phase === 'DROGUE_DESCENT' && simState.altitude > 400)) {
+                    simState.flight_phase = 'DROGUE_DESCENT';
+                } else if ((simState.flight_phase === 'DROGUE_DESCENT' && simState.altitude <= 400) || simState.flight_phase === 'MAIN_DESCENT') {
+                     simState.flight_phase = 'MAIN_DESCENT';
+                }
+                if (simState.altitude <= 0 && t > 10) {
+                    simState.flight_phase = 'LANDED';
+                }
+
+                // Physics Calculation based on phase
+                let drag_decel = (0.0005 * simState.speed * simState.speed); 
+
+                switch(simState.flight_phase){
+                    case 'BOOST':
+                        simState.az = (20 * GRAVITY * ((7 - t) / 6) - GRAVITY - drag_decel) / GRAVITY;
+                        break;
+                    case 'COAST': case 'APOGEE':
+                        simState.az = (-GRAVITY - drag_decel) / GRAVITY;
+                        break;
+                    case 'DROGUE_DESCENT':
+                        simState.az = (-GRAVITY + (0.01 * simState.speed * simState.speed)) / GRAVITY;
+                         if(simState.speed < -25) simState.az = 0;
+                        break;
+                    case 'MAIN_DESCENT':
+                        simState.az = (-GRAVITY + (0.05 * simState.speed * simState.speed)) / GRAVITY;
+                        if(simState.speed < -8) simState.az = 0;
+                        break;
+                    case 'LANDED':
+                        simState.az = 0; simState.speed = 0; break;
+                     default:
+                        simState.az = 0; simState.speed = 0; break;
+                }
+
+                let time_step = isConnected ? 0.2 : 0;
+                if (simState.flight_phase !== 'LANDED') {
+                    simState.speed += simState.az * GRAVITY * time_step;
+                    simState.altitude += simState.speed * time_step;
+                }
+                if (simState.altitude < 0) simState.altitude = 0;
+                
+                simState.lat += (simState.speed / 111111) * time_step * 0.05;
+                simState.lon += (simState.speed / 111111 / Math.cos(simState.lat * Math.PI/180)) * time_step * 0.05;
+
+                // --- Attitude Simulation (Aerodynamic Angles) ---
+                let pitch_deg = 0;
+                if(simState.flight_phase === 'PRE_FLIGHT') pitch_deg = 90;
+                else if(simState.flight_phase === 'BOOST' || simState.flight_phase === 'COAST') pitch_deg = Math.max(0, 90 - (t-1)*5);
+                else if(simState.flight_phase === 'APOGEE') pitch_deg = 0;
+                else if(simState.flight_phase === 'DROGUE_DESCENT') pitch_deg = -85 + Math.sin(t*2)*10;
+                else if(simState.flight_phase === 'MAIN_DESCENT') pitch_deg = -90 + Math.sin(t*3)*5;
+                else if(simState.flight_phase === 'LANDED') pitch_deg = 0;
+
+                const data = {
+                    timestamp: Date.now(), flight_time: flightSeconds, altitude: simState.altitude,
+                    pressure: 1013.25 * Math.pow(1.0 - (simState.altitude / 44330), 5.255),
+                    speed: simState.speed, flight_phase: simState.flight_phase,
+                    battery: Math.max(0, 95 - (flightSeconds / 20)),
+                    gnss: { lat: simState.lat, lon: simState.lon, alt: simState.altitude, sats: 8 + Math.floor(Math.random() * 4), speed: Math.abs(simState.speed), time: new Date() },
+                    imu1: { 
+                        roll: simState.flight_phase === 'BOOST' ? Math.sin(t * 5) * 20 : (simState.flight_phase === 'LANDED' ? 90 : Math.sin(t/2)*5),
+                        pitch: pitch_deg,
+                        yaw: (t * 5) % 360, 
+                        ax: Math.sin(t)*0.1, ay: Math.cos(t)*0.1, az: simState.az, 
+                        magx: 25, magy: 25, magz: -50 },
+                    imu2: { 
+                        roll: simState.flight_phase === 'BOOST' ? Math.sin(t * 5) * 20 : (simState.flight_phase === 'LANDED' ? 90 : Math.sin(t/2)*5),
+                        pitch: pitch_deg, 
+                        yaw: (t * 5) % 360, 
+                        ax: Math.sin(t)*0.1, ay: Math.cos(t)*0.1, az: simState.az
+                    },
+                    pyro1_cont: true, pyro2_cont: true, pyro3_cont: true,
+                };
+                return data;
+            }
+
+            function updateTimer() { flightSeconds++; const mins = Math.floor(flightSeconds / 60).toString().padStart(2, '0'); const secs = (flightSeconds % 60).toString().padStart(2, '0'); flightTimerEl.textContent = `${mins}:${secs}`; }
+            
+            // --- Event Listeners ---
+            connectBtn.addEventListener('click', () => {
+                isConnected = !isConnected;
+                if (isConnected) {
+                    initSimState();
+                    connectBtn.textContent = 'Disconnect'; connectBtn.classList.replace('btn-primary', 'btn-danger');
+                    connectionStatus.classList.replace('off','green'); connectionText.textContent = 'CONNECTED';
+                    logMessage('Connection established. Simulation running.', 'info');
+                    flightSeconds = 0; flightTimerEl.textContent = '00:00';
+                    flightTimerInterval = setInterval(updateTimer, 1000);
+                    simulationInterval = setInterval(() => updateUI(generateFakeData()), 200);
+                } else {
+                    connectBtn.textContent = 'Connect'; connectBtn.classList.replace('btn-danger', 'btn-primary');
+                    connectionStatus.classList.replace('green', 'off'); connectionText.textContent = 'DISCONNECTED';
+                    logMessage('Connection terminated.', 'warn');
+                    clearInterval(simulationInterval); clearInterval(flightTimerInterval);
+                    initSimState(); // Reset for next run
+                    updateUI(generateFakeData()); // Show pre-flight state
+                }
+            });
+            mslPressureInput.addEventListener('change', (e) => { const val = parseFloat(e.target.value); if (!isNaN(val)) { groundMslPressure = val; logMessage(`Ground MSL pressure set to ${val.toFixed(2)} hPa.`); } });
+            logBtn.addEventListener('click', () => {
+                isLogging = !isLogging;
+                if (isLogging) {
+                    telemetryLog = []; logBtn.textContent = 'Stop Logging'; logBtn.classList.replace('btn-success', 'btn-danger');
+                    downloadLogBtn.disabled = true; logMessage('Telemetry logging started.', 'warn');
+                } else {
+                    logBtn.textContent = 'Start Logging'; logBtn.classList.replace('btn-danger', 'btn-success');
+                    downloadLogBtn.disabled = false; logMessage(`Telemetry logging stopped. ${telemetryLog.length} data points recorded.`, 'info');
+                }
+            });
+            downloadLogBtn.addEventListener('click', () => {
+                if (telemetryLog.length === 0) { logMessage('No log data to download.', 'error'); return; }
+                const headers = 'timestamp,flight_time_s,flight_phase,altitude_m,speed_ms,pressure_hpa,lat,lon,sats,imu1_roll,imu1_pitch,imu1_yaw,imu1_ax_g,imu1_ay_g,imu1_az_g';
+                const csvContent = headers + '\n' + telemetryLog.map(d => { return [d.timestamp, d.flight_time, d.flight_phase, d.altitude.toFixed(2), d.speed.toFixed(2), d.pressure.toFixed(2), d.gnss.lat.toFixed(6), d.gnss.lon.toFixed(6), d.gnss.sats, d.imu1.roll.toFixed(2), d.imu1.pitch.toFixed(2), d.imu1.yaw.toFixed(2), d.imu1.ax.toFixed(3), d.imu1.ay.toFixed(3), d.imu1.az.toFixed(3)].join(','); }).join('\n');
+                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' }); const url = URL.createObjectURL(blob);
+                const a = document.createElement("a"); a.href = url; a.download = `HPR_LOG_${new Date().toISOString()}.csv`;
+                document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+                logMessage('Log file downloaded.', 'info');
+            });
+            
+            modelImportBtn.addEventListener('change', (event) => {
+                const file = event.target.files[0];
+                if (!file) return;
+
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const contents = e.target.result;
+                    const loader = new THREE.STLLoader();
+                    const geometry = loader.parse(contents);
+                    
+                    if (rocketModel) scene.remove(rocketModel);
+                    
+                    const material = new THREE.MeshPhongMaterial({ color: 0x00aaff, specular: 0x111111, shininess: 200 });
+                    const newMesh = new THREE.Mesh(geometry, material);
+                    
+                    const orientationWrapper = new THREE.Group();
+                    orientationWrapper.add(newMesh);
+                    orientationWrapper.rotation.x = -Math.PI / 2;
+
+                    const box = new THREE.Box3().setFromObject(orientationWrapper);
+                    const center = box.getCenter(new THREE.Vector3());
+                    const size = box.getSize(new THREE.Vector3());
+                    const maxDim = Math.max(size.x, size.y, size.z);
+                    const scale = 15 / maxDim;
+                    
+                    orientationWrapper.position.sub(center);
+                    orientationWrapper.scale.set(scale, scale, scale);
+
+                    rocketModel = new THREE.Group();
+                    rocketModel.add(orientationWrapper);
+                    rocketModel.rotation.order = 'YXZ'; 
+                    scene.add(rocketModel);
+
+                    logMessage(`Imported model: ${file.name}`, 'info');
+                };
+                reader.readAsArrayBuffer(file);
+            });
+
+            // --- Initial Render ---
+            initSimState();
+            init3DViewer();
+            logMessage('Ground Control Station Initialized.');
+            logMessage('System is DISARMED. Connect to vehicle to begin.');
+            renderPyroControls();
+            updateUI(generateFakeData());
+        });
+    </script>
+</body>
+</html>
