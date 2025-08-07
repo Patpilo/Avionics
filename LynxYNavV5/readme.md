@@ -36,7 +36,6 @@ This repository contains the avionics hardware schematics, and documentation for
 - Buck converter to 3.3V  
 - USB 5V LDO 3.3V
 - Gauge Texas intruments INA260AIPWR
-- 
 
 ### Data Logging
 - SPI Flash ESP32 4Mb
